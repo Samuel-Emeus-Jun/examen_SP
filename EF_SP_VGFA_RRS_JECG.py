@@ -14,6 +14,11 @@ nltk.download('stopwords')
 
 data = pd.read_excel('SISTEMAS PREDICTIVOS.xlsx')
 
+data['lat'] = pd.to_numeric(data['lat'], errors='coerce')
+data['lon'] = pd.to_numeric(data['lon'], errors='coerce')
+
+data = data.dropna(subset=['lat', 'lon'])
+
 stemmer = SnowballStemmer('spanish')
 stemmer_p = PorterStemmer()
 stop_words = set(stopwords.words('spanish'))
@@ -82,31 +87,39 @@ categorias_municipios = {
     "Valle de Chalco Solidaridad": ["vall chalc", "chalc", ]
 }
 
-categorias_edificios = {
-    "departamento": ["departa", "edifici departa", "edifici aparta", "unid departa", "edifici pi",
-                     "departa ranch san lorenz"],
-    "residencial": ["residenci"],
-    "vecindad": ["vecind", "edif antigu tip vecind"],
-    "condominio": ["condomini"],
-    "multifamiliar": ["multifamili", "unid habitacion"],
-    "oficina": ["oficin", "pi oficin comerci mixt"],
-    "comercio": ["comerci", "hotel", "hotel royal reform"],
-    "escuela": ["escuel", "escuel primari", "escuel primari koweit", 
-                "escuel secundari", "escuel secundari cuauhtemoc", 
-                "escuel criminolog", "facult medicin unam", "tec monterrey cdmx",  
-                "escol"],
-    "hospital": ["hospit", "hospitalclin", "hospit ciud mexic belisari dominguez", 
-                 "hospit gener dr manuel gea gonzalez"],
-    "clínica": ["clinic pren", "laboratori", "almacen medica"],
-    "gobierno": ["predi gobiern abandon", "edifici imss"],
-    "fábrica": ["fabric", "tall"],
-    "barda": ["bard", "post luz"],
-    "infraestructura": ["puent", "banquet", "call", "call callejon", "via public", "autop"],
-    "campamento": ["campament"],
-    "asilo": ["asil priv"],
-    "aeropuerto": ["aeropuert internacion ciud mexic"],
-    "estación": ["estacion"],
+mapa_tipo_daño = {
+    "daños menores": 0,
+    "grietas": 1,
+    "daños mayores": 2,
+    "derrumbe": 3,
+    "hundimientos": 4
 }
+
+# categorias_edificios = {
+#     "departamento": ["departa", "edifici departa", "edifici aparta", "unid departa", "edifici pi",
+#                      "departa ranch san lorenz"],
+#     "residencial": ["residenci"],
+#     "vecindad": ["vecind", "edif antigu tip vecind"],
+#     "condominio": ["condomini"],
+#     "multifamiliar": ["multifamili", "unid habitacion"],
+#     "oficina": ["oficin", "pi oficin comerci mixt"],
+#     "comercio": ["comerci", "hotel", "hotel royal reform"],
+#     "escuela": ["escuel", "escuel primari", "escuel primari koweit", 
+#                 "escuel secundari", "escuel secundari cuauhtemoc", 
+#                 "escuel criminolog", "facult medicin unam", "tec monterrey cdmx",  
+#                 "escol"],
+#     "hospital": ["hospit", "hospitalclin", "hospit ciud mexic belisari dominguez", 
+#                  "hospit gener dr manuel gea gonzalez"],
+#     "clínica": ["clinic pren", "laboratori", "almacen medica"],
+#     "gobierno": ["predi gobiern abandon", "edifici imss"],
+#     "fábrica": ["fabric", "tall"],
+#     "barda": ["bard", "post luz"],
+#     "infraestructura": ["puent", "banquet", "call", "call callejon", "via public", "autop"],
+#     "campamento": ["campament"],
+#     "asilo": ["asil priv"],
+#     "aeropuerto": ["aeropuert internacion ciud mexic"],
+#     "estación": ["estacion"],
+# }
 
 def preprocess_text(text):
     text = str(text)  
@@ -138,24 +151,39 @@ def normalizar_delegacion(text, delegaciones):
             return delegacion
     return 'Provincia'
 
-def normalizar_edificio(text, edificios):
-    for edificio, palabras_clave in edificios.items():
-        if any(palabra in text for palabra in palabras_clave):
-            return edificio
-    return 'Otro'
+def categorizar_riesgo(valor):
+    if valor == 0:
+        return 'bajo'
+    elif valor == 1:
+        return 'medio'
+    else:
+        return 'alto'
+
+# def normalizar_edificio(text, edificios):
+#     for edificio, palabras_clave in edificios.items():
+#         if any(palabra in text for palabra in palabras_clave):
+#             return edificio
+#     return 'Otro'
 
 data['tipo_daño_procesado'] = data['tipo_daño'].apply(preprocess_text)
 data['tipo_daño_procesado'] = data['tipo_daño_procesado'].apply(remove_stopwords)
 data['tipo_daño_procesado'] = data['tipo_daño_procesado'].apply(stem_words)
 data['tipo_daño_clasificado'] = data['tipo_daño_procesado'].apply(lambda x: clasificar_daño(x, categorias_daños))
 
+data['escala_daño'] = data['tipo_daño_clasificado'].map(mapa_tipo_daño)
+data['riesgo_categorizado'] = data['escala_daño'].apply(categorizar_riesgo)
+
+
 data['delegacion_procesada'] = data['delegacion'].apply(preprocess_text)
 data['delegacion_procesada'] = data['delegacion_procesada'].apply(remove_stopwords)
 data['delegacion_procesada'] = data['delegacion_procesada'].apply(stem_words)
 data['delegacion_normalizada'] = data['delegacion_procesada'].apply(lambda x: normalizar_delegacion(x, categorias_municipios))
 
-data['edificio_procesado'] = data['lugar'].apply(preprocess_text)
-data['edificio_procesado'] = data['edificio_procesado'].apply(remove_stopwords)
-data['edificio_procesado'] = data['edificio_procesado'].apply(stem_words)
-data['edificio_normalizado'] = data['edificio_procesado'].apply(lambda x: normalizar_edificio(x, categorias_edificios))
-# print(data['tipo_daño_procesado'])
+data = data.query('delegacion_normalizada != "Provincia"')
+
+# data['edificio_procesado'] = data['lugar'].apply(preprocess_text)
+# data['edificio_procesado'] = data['edificio_procesado'].apply(remove_stopwords)
+# data['edificio_procesado'] = data['edificio_procesado'].apply(stem_words)
+# data['edificio_normalizado'] = data['edificio_procesado'].apply(lambda x: normalizar_edificio(x, categorias_edificios))
+
+relevant_data = data[['lat', 'lon', 'tipo_daño_clasificado', 'riesgo_categorizado', 'delegacion_normalizada']]
