@@ -1,6 +1,13 @@
 import re
 import nltk 
 import pandas as pd
+import numpy as np
+import plotly.express as px
+
+from sklearn.cluster import KMeans
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
 
 
 from nltk.tokenize import word_tokenize
@@ -186,4 +193,107 @@ data = data.query('delegacion_normalizada != "Provincia"')
 # data['edificio_procesado'] = data['edificio_procesado'].apply(stem_words)
 # data['edificio_normalizado'] = data['edificio_procesado'].apply(lambda x: normalizar_edificio(x, categorias_edificios))
 
-relevant_data = data[['lat', 'lon', 'tipo_daño_clasificado', 'riesgo_categorizado', 'delegacion_normalizada']]
+relevant_data = data[['lat', 'lon', 'tipo_daño_clasificado', 'riesgo_categorizado', 'delegacion_normalizada', 'escala_daño']].dropna()
+
+
+x = relevant_data[['lat', 'lon']]
+y = relevant_data['riesgo_categorizado']
+
+X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
+scaler = MinMaxScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+print("Primeras filas de X_train normalizado:")
+print(X_train_scaled[:5])
+
+print(f"Tamaño de X_train: {X_train.shape}, X_test: {X_test.shape}")
+
+print(f"Mínimos de cada variable: {X_train_scaled.min(axis=0)}, Máximos: {X_train_scaled.max(axis=0)}")
+
+knn = KNeighborsClassifier(n_neighbors=5)
+knn.fit(X_train_scaled, y_train)
+accuracy = knn.score(X_test_scaled, y_test)
+
+
+print(f"Precisión del modelo KNN: {accuracy:.2f}")
+
+
+# nuevas_coordenadas = [[19.432608, -99.133209], [19.300000, -99.200000]] 
+# nuevas_coordenadas_scaled = scaler.transform(nuevas_coordenadas)
+
+# predicciones = knn.predict(nuevas_coordenadas_scaled)
+# print(f"Predicción para las nuevas coordenadas {nuevas_coordenadas}: {predicciones}")
+
+k = relevant_data['delegacion_normalizada'].nunique()
+kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+relevant_data['cluster'] = kmeans.fit_predict(relevant_data[['lat', 'lon']])
+
+
+print("Centroides de los clusters:")
+print(kmeans.cluster_centers_)
+
+print("\nDistribución de los clusters:")
+print(relevant_data['cluster'].value_counts())
+
+fig = px.scatter_mapbox(
+    relevant_data,
+    lat='lat',
+    lon='lon',
+    color='cluster',
+    hover_name='riesgo_categorizado',
+    hover_data=['escala_daño', 'delegacion_normalizada'],
+    color_continuous_scale="plasma",
+    zoom=10,
+    title="Clusters de Daño por K-Means"
+)
+
+# Configuración del mapa
+fig.update_layout(
+    mapbox_style="carto-positron",
+    mapbox_zoom=10,
+    mapbox_center={"lat": relevant_data['lat'].mean(), "lon": relevant_data['lon'].mean()}
+)
+
+# Mostrar el mapa
+fig.show()
+
+# scaler = MinMaxScaler()
+# relevant_data[['lat', 'lon']] = scaler.fit_transform(relevant_data[['lat', 'lon']])
+
+# k = 4
+# kmeans = KMeans(n_clusters=k, random_state=42, n_init = 10)
+# relevant_data['cluster'] = kmeans.fit_predict(relevant_data[['lat', 'lon']])
+
+# mapeo_riesgo = {
+#     0: 'Sin riesgo',
+#     1: 'Bajo',
+#     2: 'Moderado',
+#     3: 'Alto'
+# }
+
+# relevant_data['Riesgo_kmeans'] = relevant_data['cluster'].map(mapeo_riesgo)
+
+# knn = KNeighborsClassifier(n_neighbors=5)
+# knn.fit(relevant_data[ ['lat', 'lon']], relevant_data['escala_daño'])
+
+# def predecir_riesgo(lat, lon):
+#     coordenadas = scaler.transform([[lat, lon]])
+#     dist, _ = knn.kneighbors(coordenadas)
+
+#     if dist.mean() > 0.2:
+#         return 'Sin riesgo'
+#     return knn.predict(coordenadas)[0]
+
+
+# fig = px.scatter_mapbox(relevant_data,
+#                         lat = 'lat',
+#                         lon = 'lon',
+#                         color = 'Riesgo_kmeans',
+#                         hover_name = 'tipo_daño_clasificado',
+#                         mapbox_style = 'carto-positron',
+#                         zoom = 10,
+#                         title = 'Mapa de riesgo de daños en la CDMX',
+# )
+
+# fig.show()
