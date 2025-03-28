@@ -3,11 +3,16 @@ import nltk
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import matplotlib.pyplot as plt
 
 from sklearn.cluster import KMeans
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
+
+from haversine import haversine
+from scipy.spatial.distance import cdist
+#from kmodes.kprototypes import KPrototypes
 
 
 from nltk.tokenize import word_tokenize
@@ -204,19 +209,23 @@ scaler = MinMaxScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-print("Primeras filas de X_train normalizado:")
-print(X_train_scaled[:5])
+# print("Primeras filas de X_train normalizado:")
+# print(X_train_scaled[:5])
 
-print(f"Tamaño de X_train: {X_train.shape}, X_test: {X_test.shape}")
+# print(f"Tamaño de X_train: {X_train.shape}, X_test: {X_test.shape}")
 
-print(f"Mínimos de cada variable: {X_train_scaled.min(axis=0)}, Máximos: {X_train_scaled.max(axis=0)}")
+# print(f"Mínimos de cada variable: {X_train_scaled.min(axis=0)}, Máximos: {X_train_scaled.max(axis=0)}")
+
+relevant_data[['lat_normalizada', 'lon_normalizada']] = scaler.fit_transform(relevant_data[['lat', 'lon']])
+#print(relevant_data[['lat_normalizada', 'lon_normalizada']].head())
 
 knn = KNeighborsClassifier(n_neighbors=5)
 knn.fit(X_train_scaled, y_train)
 accuracy = knn.score(X_test_scaled, y_test)
 
+##PRUEBAS MODELO KNN
 
-print(f"Precisión del modelo KNN: {accuracy:.2f}")
+# print(f"Precisión del modelo KNN: {accuracy:.2f}")
 
 
 # nuevas_coordenadas = [[19.432608, -99.133209], [19.300000, -99.200000]] 
@@ -225,38 +234,107 @@ print(f"Precisión del modelo KNN: {accuracy:.2f}")
 # predicciones = knn.predict(nuevas_coordenadas_scaled)
 # print(f"Predicción para las nuevas coordenadas {nuevas_coordenadas}: {predicciones}")
 
-k = relevant_data['delegacion_normalizada'].nunique()
-kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-relevant_data['cluster'] = kmeans.fit_predict(relevant_data[['lat', 'lon']])
+##PRUEBA DE INERCIA PARA ENCONTRAR EL CODO (WEY, ESTO SOLO TIENE SENTIDO SI ERES IED)
+
+# inertia = []
+# k_range = range(2, 30)
+# for k in k_range:
+#     kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+#     kmeans.fit(relevant_data[['lat_normalizada', 'lon_normalizada']])
+#     inertia.append(kmeans.inertia_)
+
+# plt.figure(figsize=(10, 6))
+# plt.plot(k_range, inertia, marker='o')
+# plt.title('Método del codo para determinar el número óptimo de clusters')
+# plt.xlabel('Número de clusters (k)')
+# plt.ylabel('Inercia')
+# plt.show()
+
+##KMEANS SOLITO
+
+# k = #relevant_data['delegacion_normalizada'].nunique()
+# kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+# relevant_data['cluster'] = kmeans.fit_predict(relevant_data[['lat', 'lon']])
 
 
-print("Centroides de los clusters:")
-print(kmeans.cluster_centers_)
+# print("Centroides de los clusters:")
+# print(kmeans.cluster_centers_)
 
-print("\nDistribución de los clusters:")
-print(relevant_data['cluster'].value_counts())
+# print("\nDistribución de los clusters:")
+# print(relevant_data['cluster'].value_counts())
 
-fig = px.scatter_mapbox(
-    relevant_data,
-    lat='lat',
-    lon='lon',
-    color='cluster',
-    hover_name='riesgo_categorizado',
-    hover_data=['escala_daño', 'delegacion_normalizada'],
-    color_continuous_scale="plasma",
-    zoom=10,
-    title="Clusters de Daño por K-Means"
-)
+# cluster_counts = relevant_data['cluster'].value_counts()
+# print(cluster_counts)
 
-# Configuración del mapa
-fig.update_layout(
-    mapbox_style="carto-positron",
-    mapbox_zoom=10,
-    mapbox_center={"lat": relevant_data['lat'].mean(), "lon": relevant_data['lon'].mean()}
-)
+# clusters_validos = cluster_counts[cluster_counts >= 5].index
+# relevant_data = relevant_data[relevant_data['cluster'].isin(clusters_validos)]
 
-# Mostrar el mapa
-fig.show()
+
+
+## HAVERSINE 
+
+def haversine_kmeans(X, k):
+    X_rad = np.radians(X)
+
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    kmeans.fit(X_rad)
+    centroids = kmeans.cluster_centers_
+
+    distances = cdist(X_rad, centroids, metric = haversine)
+    labels = np.argmin(distances, axis=1)
+    return labels
+
+relevant_data['cluster_haversine'] = haversine_kmeans(relevant_data[['lat', 'lon']], 30)
+print("Distribución de clusters (Haversine):\n", relevant_data['cluster_haversine'].value_counts())
+
+
+
+##K PROTOTYPES (ESTOY HLV)
+
+# def k_prototypes_clustering(df, k):
+#     x = df[['lat_normalizada', 'lon_normalizada', 'tipo_daño_clasificado']].copy()
+#     x['tipo_daño_clasificado'] = x['tipo_daño_clasificado'].astype(str)
+
+#     matriz_x = x.to_numpy()
+#     kproto = KPrototypes(n_clusters = k, random_state = 42)
+#     clusters = kproto.fit_predict(matriz_x, categorical=[2])
+#     return clusters
+
+# relevant_data['clusters_prototype'] = k_prototypes_clustering(relevant_data, 10)
+# print("Distribución de clusters (K-Prototypes):\n", relevant_data['clusters_prototype'].value_counts())
+
+
+
+
+
+## MAPA DE KMEANS FALLIDO
+
+# fig = px.scatter_mapbox(
+#     relevant_data,
+#     lat='lat',
+#     lon='lon',
+#     color='cluster',
+#     hover_name='riesgo_categorizado',
+#     hover_data=['escala_daño', 'delegacion_normalizada'],
+#     color_continuous_scale="plasma",
+#     zoom=10,
+#     title="Clusters de Daño por K-Means"
+# )
+
+# fig.update_layout(
+#     mapbox_style="carto-positron",
+#     mapbox_zoom=10,
+#     mapbox_center={"lat": relevant_data['lat'].mean(), "lon": relevant_data['lon'].mean()}
+# )
+
+# fig.show()
+
+
+
+
+
+
+
 
 # scaler = MinMaxScaler()
 # relevant_data[['lat', 'lon']] = scaler.fit_transform(relevant_data[['lat', 'lon']])
