@@ -223,6 +223,8 @@ knn = KNeighborsClassifier(n_neighbors=5)
 knn.fit(X_train_scaled, y_train)
 accuracy = knn.score(X_test_scaled, y_test)
 
+
+
 ##PRUEBAS MODELO KNN
 
 # print(f"Precisión del modelo KNN: {accuracy:.2f}")
@@ -233,6 +235,40 @@ accuracy = knn.score(X_test_scaled, y_test)
 
 # predicciones = knn.predict(nuevas_coordenadas_scaled)
 # print(f"Predicción para las nuevas coordenadas {nuevas_coordenadas}: {predicciones}")
+
+
+##DISEÑO DE HEATMAP
+
+
+fig = px.density_mapbox(
+    relevant_data,
+    lat = 'lat',
+    lon = 'lon',
+    z = 'escala_daño',
+    radius = 10,
+    center = {'lat': 19.4, 'lon' : -99.2},
+    zoom = 10,
+    mapbox_style = 'carto-positron',
+    color_continuous_scale = 'Turbo',
+)
+
+fig.update_layout(title = 'Mapa de Calor de Daños en la CDMX')
+
+fig.add_scattermapbox(
+    lat=[19.4326], 
+    lon=[-99.1332],
+    mode='markers', 
+    marker= dict(size = 15, color = 'yellow',),
+    name='Ubicación del usuario'
+)
+
+fig.show()
+
+
+
+
+
+
 
 ##PRUEBA DE INERCIA PARA ENCONTRAR EL CODO (WEY, ESTO SOLO TIENE SENTIDO SI ERES IED)
 
@@ -273,19 +309,19 @@ accuracy = knn.score(X_test_scaled, y_test)
 
 ## HAVERSINE 
 
-def haversine_kmeans(X, k):
-    X_rad = np.radians(X)
+# def haversine_kmeans(X, k):
+#     X_rad = np.radians(X)
 
-    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-    kmeans.fit(X_rad)
-    centroids = kmeans.cluster_centers_
+#     kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+#     kmeans.fit(X_rad)
+#     centroids = kmeans.cluster_centers_
 
-    distances = cdist(X_rad, centroids, metric = haversine)
-    labels = np.argmin(distances, axis=1)
-    return labels
+#     distances = cdist(X_rad, centroids, metric = haversine)
+#     labels = np.argmin(distances, axis=1)
+#     return labels
 
-relevant_data['cluster_haversine'] = haversine_kmeans(relevant_data[['lat', 'lon']], 30)
-print("Distribución de clusters (Haversine):\n", relevant_data['cluster_haversine'].value_counts())
+# relevant_data['cluster_haversine'] = haversine_kmeans(relevant_data[['lat', 'lon']], 30)
+# print("Distribución de clusters (Haversine):\n", relevant_data['cluster_haversine'].value_counts())
 
 
 
