@@ -141,6 +141,17 @@ def categorizar_riesgo(valor):
     else:
         return 'alto'
 
+def pedir_coordenadas():
+    try:
+        input_str = input("Introduce las coordenadas (latitud, longitud) separadas por comas: ")
+        lat_str, lon_str = input_str.split(",")
+        print([[float(lat_str)], [float(lon_str)]])
+        return [[float(lat_str)], [float(lon_str)]] 
+    except ValueError:
+        print("Error: Debes introducir exactamente dos valores separados por comas.")
+        return None #pedir_coordenadas()
+    
+
 
 ##LIMPIEZA BBDD
 
@@ -189,37 +200,70 @@ accuracy = knn.score(X_test_scaled, y_test)
 
 # print(f"Precisión del modelo KNN: {accuracy:.2f}")
 
-# nuevas_coordenadas = [[19.432608, -99.133209], [19.300000, -99.200000]] 
+
+
+# nuevas_coordenadas = pedir_coordenadas()
 # nuevas_coordenadas_scaled = scaler.transform(nuevas_coordenadas)
 
 # predicciones = knn.predict(nuevas_coordenadas_scaled)
 # print(f"Predicción para las nuevas coordenadas {nuevas_coordenadas}: {predicciones}")
 
-
 ##DISEÑO DE HEATMAP
 
+coordenadas_usuario = {'lat': 19.437, 'lon': -99.138} 
 
-fig = px.density_mapbox(
+
+
+fig = px.density_map(
     relevant_data,
     lat = 'lat',
     lon = 'lon',
-    z = 'tipo_daño_clasificado',
+    z = 'escala_daño',
     radius = 10,
     center = {'lat': 19.4, 'lon' : -99.2},
     zoom = 10,
-    mapbox_style = 'carto-positron',
+    map_style = 'carto-darkmatter',
     color_continuous_scale = 'Turbo',
+    
 )
 
-fig.update_layout(title = 'Mapa de Calor de Daños en la CDMX')
+fig.data[0].hoverinfo = 'skip'
 
-fig.add_scattermapbox(
-    lat=[19.4326], 
-    lon=[-99.1332],
-    mode='markers', 
-    marker= dict(size = 15, color = 'yellow',),
-    name='Ubicación del usuario'
+
+fig.update_coloraxes(
+    colorbar_title = 'Escala de Daño',
+    colorbar_tickvals = [0, 2, 4],
+    colorbar_ticktext = ['Bajo', 'Medio', 'Alto'],
 )
+
+
+fig.add_scattermap(
+    lat=[19.437], 
+    lon=[-99.138],
+    mode='markers',
+    marker=dict(
+        size= 15, 
+        color='white',  
+        symbol='circle',    
+        ),
+    hovertext = 'Coordenadas del usuario',
+    showlegend = False,
+)
+
+fig.add_scattermap(
+    lat=relevant_data['lat'], 
+    lon=relevant_data['lon'],
+    mode='markers',
+    marker=dict(size=15, color='rgba(0,0,0,0)'),
+    hoverinfo='text',
+    text = relevant_data[['tipo_daño_clasificado', 'riesgo_categorizado']].apply(lambda x: f"Daño recibido: {x[0]}<br>Riesgo de derrumbe: {x[1]}", axis=1),
+    showlegend=False,
+)
+
+fig.update_layout(
+    title = 'Mapa de Calor de Daños en la CDMX',
+    map_layers=[{"below": "traces"}])
+
 
 fig.show()
 
