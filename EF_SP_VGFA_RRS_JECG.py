@@ -10,11 +10,6 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 
-from haversine import haversine
-from scipy.spatial.distance import cdist
-#from kmodes.kprototypes import KPrototypes
-
-
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import SnowballStemmer
@@ -107,31 +102,6 @@ mapa_tipo_daño = {
     "hundimientos": 4
 }
 
-# categorias_edificios = {
-#     "departamento": ["departa", "edifici departa", "edifici aparta", "unid departa", "edifici pi",
-#                      "departa ranch san lorenz"],
-#     "residencial": ["residenci"],
-#     "vecindad": ["vecind", "edif antigu tip vecind"],
-#     "condominio": ["condomini"],
-#     "multifamiliar": ["multifamili", "unid habitacion"],
-#     "oficina": ["oficin", "pi oficin comerci mixt"],
-#     "comercio": ["comerci", "hotel", "hotel royal reform"],
-#     "escuela": ["escuel", "escuel primari", "escuel primari koweit", 
-#                 "escuel secundari", "escuel secundari cuauhtemoc", 
-#                 "escuel criminolog", "facult medicin unam", "tec monterrey cdmx",  
-#                 "escol"],
-#     "hospital": ["hospit", "hospitalclin", "hospit ciud mexic belisari dominguez", 
-#                  "hospit gener dr manuel gea gonzalez"],
-#     "clínica": ["clinic pren", "laboratori", "almacen medica"],
-#     "gobierno": ["predi gobiern abandon", "edifici imss"],
-#     "fábrica": ["fabric", "tall"],
-#     "barda": ["bard", "post luz"],
-#     "infraestructura": ["puent", "banquet", "call", "call callejon", "via public", "autop"],
-#     "campamento": ["campament"],
-#     "asilo": ["asil priv"],
-#     "aeropuerto": ["aeropuert internacion ciud mexic"],
-#     "estación": ["estacion"],
-# }
 
 def preprocess_text(text):
     text = str(text)  
@@ -171,11 +141,8 @@ def categorizar_riesgo(valor):
     else:
         return 'alto'
 
-# def normalizar_edificio(text, edificios):
-#     for edificio, palabras_clave in edificios.items():
-#         if any(palabra in text for palabra in palabras_clave):
-#             return edificio
-#     return 'Otro'
+
+##LIMPIEZA BBDD
 
 data['tipo_daño_procesado'] = data['tipo_daño'].apply(preprocess_text)
 data['tipo_daño_procesado'] = data['tipo_daño_procesado'].apply(remove_stopwords)
@@ -193,13 +160,10 @@ data['delegacion_normalizada'] = data['delegacion_procesada'].apply(lambda x: no
 
 data = data.query('delegacion_normalizada != "Provincia"')
 
-# data['edificio_procesado'] = data['lugar'].apply(preprocess_text)
-# data['edificio_procesado'] = data['edificio_procesado'].apply(remove_stopwords)
-# data['edificio_procesado'] = data['edificio_procesado'].apply(stem_words)
-# data['edificio_normalizado'] = data['edificio_procesado'].apply(lambda x: normalizar_edificio(x, categorias_edificios))
+
+##KNN TRAINING
 
 relevant_data = data[['lat', 'lon', 'tipo_daño_clasificado', 'riesgo_categorizado', 'delegacion_normalizada', 'escala_daño']].dropna()
-
 
 x = relevant_data[['lat', 'lon']]
 y = relevant_data['riesgo_categorizado']
@@ -211,9 +175,7 @@ X_test_scaled = scaler.transform(X_test)
 
 # print("Primeras filas de X_train normalizado:")
 # print(X_train_scaled[:5])
-
 # print(f"Tamaño de X_train: {X_train.shape}, X_test: {X_test.shape}")
-
 # print(f"Mínimos de cada variable: {X_train_scaled.min(axis=0)}, Máximos: {X_train_scaled.max(axis=0)}")
 
 relevant_data[['lat_normalizada', 'lon_normalizada']] = scaler.fit_transform(relevant_data[['lat', 'lon']])
@@ -223,12 +185,9 @@ knn = KNeighborsClassifier(n_neighbors=5)
 knn.fit(X_train_scaled, y_train)
 accuracy = knn.score(X_test_scaled, y_test)
 
-
-
 ##PRUEBAS MODELO KNN
 
 # print(f"Precisión del modelo KNN: {accuracy:.2f}")
-
 
 # nuevas_coordenadas = [[19.432608, -99.133209], [19.300000, -99.200000]] 
 # nuevas_coordenadas_scaled = scaler.transform(nuevas_coordenadas)
@@ -244,7 +203,7 @@ fig = px.density_mapbox(
     relevant_data,
     lat = 'lat',
     lon = 'lon',
-    z = 'escala_daño',
+    z = 'tipo_daño_clasificado',
     radius = 10,
     center = {'lat': 19.4, 'lon' : -99.2},
     zoom = 10,
@@ -285,129 +244,3 @@ fig.show()
 # plt.xlabel('Número de clusters (k)')
 # plt.ylabel('Inercia')
 # plt.show()
-
-##KMEANS SOLITO
-
-# k = #relevant_data['delegacion_normalizada'].nunique()
-# kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-# relevant_data['cluster'] = kmeans.fit_predict(relevant_data[['lat', 'lon']])
-
-
-# print("Centroides de los clusters:")
-# print(kmeans.cluster_centers_)
-
-# print("\nDistribución de los clusters:")
-# print(relevant_data['cluster'].value_counts())
-
-# cluster_counts = relevant_data['cluster'].value_counts()
-# print(cluster_counts)
-
-# clusters_validos = cluster_counts[cluster_counts >= 5].index
-# relevant_data = relevant_data[relevant_data['cluster'].isin(clusters_validos)]
-
-
-
-## HAVERSINE 
-
-# def haversine_kmeans(X, k):
-#     X_rad = np.radians(X)
-
-#     kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-#     kmeans.fit(X_rad)
-#     centroids = kmeans.cluster_centers_
-
-#     distances = cdist(X_rad, centroids, metric = haversine)
-#     labels = np.argmin(distances, axis=1)
-#     return labels
-
-# relevant_data['cluster_haversine'] = haversine_kmeans(relevant_data[['lat', 'lon']], 30)
-# print("Distribución de clusters (Haversine):\n", relevant_data['cluster_haversine'].value_counts())
-
-
-
-##K PROTOTYPES (ESTOY HLV)
-
-# def k_prototypes_clustering(df, k):
-#     x = df[['lat_normalizada', 'lon_normalizada', 'tipo_daño_clasificado']].copy()
-#     x['tipo_daño_clasificado'] = x['tipo_daño_clasificado'].astype(str)
-
-#     matriz_x = x.to_numpy()
-#     kproto = KPrototypes(n_clusters = k, random_state = 42)
-#     clusters = kproto.fit_predict(matriz_x, categorical=[2])
-#     return clusters
-
-# relevant_data['clusters_prototype'] = k_prototypes_clustering(relevant_data, 10)
-# print("Distribución de clusters (K-Prototypes):\n", relevant_data['clusters_prototype'].value_counts())
-
-
-
-
-
-## MAPA DE KMEANS FALLIDO
-
-# fig = px.scatter_mapbox(
-#     relevant_data,
-#     lat='lat',
-#     lon='lon',
-#     color='cluster',
-#     hover_name='riesgo_categorizado',
-#     hover_data=['escala_daño', 'delegacion_normalizada'],
-#     color_continuous_scale="plasma",
-#     zoom=10,
-#     title="Clusters de Daño por K-Means"
-# )
-
-# fig.update_layout(
-#     mapbox_style="carto-positron",
-#     mapbox_zoom=10,
-#     mapbox_center={"lat": relevant_data['lat'].mean(), "lon": relevant_data['lon'].mean()}
-# )
-
-# fig.show()
-
-
-
-
-
-
-
-
-# scaler = MinMaxScaler()
-# relevant_data[['lat', 'lon']] = scaler.fit_transform(relevant_data[['lat', 'lon']])
-
-# k = 4
-# kmeans = KMeans(n_clusters=k, random_state=42, n_init = 10)
-# relevant_data['cluster'] = kmeans.fit_predict(relevant_data[['lat', 'lon']])
-
-# mapeo_riesgo = {
-#     0: 'Sin riesgo',
-#     1: 'Bajo',
-#     2: 'Moderado',
-#     3: 'Alto'
-# }
-
-# relevant_data['Riesgo_kmeans'] = relevant_data['cluster'].map(mapeo_riesgo)
-
-# knn = KNeighborsClassifier(n_neighbors=5)
-# knn.fit(relevant_data[ ['lat', 'lon']], relevant_data['escala_daño'])
-
-# def predecir_riesgo(lat, lon):
-#     coordenadas = scaler.transform([[lat, lon]])
-#     dist, _ = knn.kneighbors(coordenadas)
-
-#     if dist.mean() > 0.2:
-#         return 'Sin riesgo'
-#     return knn.predict(coordenadas)[0]
-
-
-# fig = px.scatter_mapbox(relevant_data,
-#                         lat = 'lat',
-#                         lon = 'lon',
-#                         color = 'Riesgo_kmeans',
-#                         hover_name = 'tipo_daño_clasificado',
-#                         mapbox_style = 'carto-positron',
-#                         zoom = 10,
-#                         title = 'Mapa de riesgo de daños en la CDMX',
-# )
-
-# fig.show()
