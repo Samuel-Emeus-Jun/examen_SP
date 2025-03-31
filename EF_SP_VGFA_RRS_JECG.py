@@ -185,7 +185,7 @@ data = data.query('delegacion_normalizada != "Provincia"')
 relevant_data = data[['lat', 'lon', 'tipo_daño_clasificado', 'riesgo_categorizado', 'delegacion_normalizada', 'escala_daño', 're_escala_daño']].dropna()
 
 x = relevant_data[['lat', 'lon']]
-y = relevant_data['escala_daño']
+y = relevant_data['riesgo_categorizado']
 
 X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
 scaler = MinMaxScaler()
@@ -242,7 +242,7 @@ fig = px.scatter_mapbox(
     hover_data={'riesgo_categorizado': True, 'escala_daño': True},
     center={'lat': 19.4, 'lon': -99.2},
     zoom=10,
-    mapbox_style='carto-darkmatter',
+    mapbox_style='carto-positron',
     color_continuous_scale= ['green', 'yellow', 'red'],#'Turbo',
     opacity = 0.5,
 
@@ -276,11 +276,12 @@ fig.add_trace(go.Scattermapbox(
     lat=[nuevas_coordenadas[0][0]],
     lon=[nuevas_coordenadas[0][1]],
     mode='markers',
-    marker=dict(size=15, color='white'),
+    marker=dict(size=15, color='black'),
     name = 'Coordenadas del usuario',
 ))
 
 fig.update_layout(
+    title='Mapa de Daños en la Ciudad de México',
     legend=dict(
         x = 0.8,
         y = 0.1,
