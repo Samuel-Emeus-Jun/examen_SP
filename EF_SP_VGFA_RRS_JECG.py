@@ -3,6 +3,7 @@ import nltk
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 
 from sklearn.cluster import KMeans
@@ -145,8 +146,8 @@ def pedir_coordenadas():
     try:
         input_str = input("Introduce las coordenadas (latitud, longitud) separadas por comas: ")
         lat_str, lon_str = input_str.split(",")
-        print([[float(lat_str)], [float(lon_str)]])
-        return [[float(lat_str)], [float(lon_str)]] 
+        print([float(lat_str), float(lon_str)])
+        return [[float(lat_str), float(lon_str)]] 
     except ValueError:
         print("Error: Debes introducir exactamente dos valores separados por comas.")
         return None #pedir_coordenadas()
@@ -177,7 +178,7 @@ data = data.query('delegacion_normalizada != "Provincia"')
 relevant_data = data[['lat', 'lon', 'tipo_daño_clasificado', 'riesgo_categorizado', 'delegacion_normalizada', 'escala_daño']].dropna()
 
 x = relevant_data[['lat', 'lon']]
-y = relevant_data['riesgo_categorizado']
+y = relevant_data['escala_daño']
 
 X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
 scaler = MinMaxScaler()
@@ -192,80 +193,120 @@ X_test_scaled = scaler.transform(X_test)
 relevant_data[['lat_normalizada', 'lon_normalizada']] = scaler.fit_transform(relevant_data[['lat', 'lon']])
 #print(relevant_data[['lat_normalizada', 'lon_normalizada']].head())
 
-knn = KNeighborsClassifier(n_neighbors=5)
+knn = KNeighborsClassifier(n_neighbors=5, weights = 'distance')
 knn.fit(X_train_scaled, y_train)
 accuracy = knn.score(X_test_scaled, y_test)
 
 ##PRUEBAS MODELO KNN
 
-# print(f"Precisión del modelo KNN: {accuracy:.2f}")
+print(f"Precisión del modelo KNN: {accuracy:.2f}")
 
 
 
-# nuevas_coordenadas = pedir_coordenadas()
-# nuevas_coordenadas_scaled = scaler.transform(nuevas_coordenadas)
+nuevas_coordenadas = [[19.3367846, -99.2284202]] #pedir_coordenadas()
+nuevas_coordenadas_scaled = scaler.transform(nuevas_coordenadas)
 
-# predicciones = knn.predict(nuevas_coordenadas_scaled)
-# print(f"Predicción para las nuevas coordenadas {nuevas_coordenadas}: {predicciones}")
+predicciones = knn.predict(nuevas_coordenadas_scaled)
+print(f"Predicción para las nuevas coordenadas {nuevas_coordenadas}: {predicciones}")
+
+
+from sklearn.metrics import classification_report
+
+y_pred = knn.predict(X_test_scaled)
+print(classification_report(y_test, y_pred))
+
 
 ##DISEÑO DE HEATMAP
 
-coordenadas_usuario = {'lat': 19.437, 'lon': -99.138} 
 
-
-
-fig = px.density_map(
+fig = px.scatter_mapbox(
     relevant_data,
-    lat = 'lat',
-    lon = 'lon',
-    z = 'escala_daño',
-    radius = 10,
-    center = {'lat': 19.4, 'lon' : -99.2},
-    zoom = 10,
-    map_style = 'carto-darkmatter',
-    color_continuous_scale = 'Turbo',
-    
-)
-
-fig.data[0].hoverinfo = 'skip'
-
-
-fig.update_coloraxes(
-    colorbar_title = 'Escala de Daño',
-    colorbar_tickvals = [0, 2, 4],
-    colorbar_ticktext = ['Bajo', 'Medio', 'Alto'],
+    lat='lat',
+    lon='lon',
+    color='escala_daño',  
+    size= [10] * len(relevant_data),
+    hover_name='tipo_daño_clasificado',
+    hover_data={'riesgo_categorizado': True, 'escala_daño': True},
+    center={'lat': 19.4, 'lon': -99.2},
+    zoom=10,
+    mapbox_style='carto-positron',
+    color_continuous_scale='Turbo',
+    opacity = 0.7,
 )
 
 
-fig.add_scattermap(
-    lat=[19.437], 
-    lon=[-99.138],
-    mode='markers',
-    marker=dict(
-        size= 15, 
-        color='white',  
-        symbol='circle',    
-        ),
-    hovertext = 'Coordenadas del usuario',
-    showlegend = False,
-)
-
-fig.add_scattermap(
-    lat=relevant_data['lat'], 
+fig.add_trace(go.Scattermapbox(
+    lat=relevant_data['lat'],
     lon=relevant_data['lon'],
     mode='markers',
-    marker=dict(size=15, color='rgba(0,0,0,0)'),
-    hoverinfo='text',
-    text = relevant_data[['tipo_daño_clasificado', 'riesgo_categorizado']].apply(lambda x: f"Daño recibido: {x[0]}<br>Riesgo de derrumbe: {x[1]}", axis=1),
-    showlegend=False,
+    marker=dict(size=8, color='rgba(0,0,0,0)'),
+    text = relevant_data['tipo_daño_clasificado'],
+    hoverinfo='text'
+))
+
+
+fig.update_traces(
+    marker=dict(sizemode='area', sizemin=3, sizeref=2.0),
+    hovertemplate="<b>%{hovertext}</b><extra></extra>"
 )
 
-fig.update_layout(
-    title = 'Mapa de Calor de Daños en la CDMX',
-    map_layers=[{"below": "traces"}])
 
-
+#fig.write_html("mapa.html")
 fig.show()
+
+
+# fig = px.density_map(
+#     relevant_data,
+#     lat = 'lat',
+#     lon = 'lon',
+#     z = 'escala_daño',
+#     radius = 10,
+#     center = {'lat': 19.4, 'lon' : -99.2},
+#     zoom = 10,
+#     map_style = 'carto-darkmatter',
+#     color_continuous_scale = 'Turbo',
+        
+# )
+
+# fig.data[0].hoverinfo = 'skip'
+
+
+# fig.update_coloraxes(
+#     colorbar_title = 'Escala de Daño',
+#     colorbar_tickvals = [0, 2, 4],
+#     colorbar_ticktext = ['Bajo', 'Medio', 'Alto'],
+# )
+
+
+# fig.add_scattermap(
+#     lat=[nuevas_coordenadas[0][0]],
+#     lon=[nuevas_coordenadas[0][1]], 
+#     mode='markers',
+#     marker=dict(
+#         size= 25, 
+#         color='white',  
+#         symbol='circle',    
+#         ),
+#     hovertext = 'Coordenadas del usuario',
+#     #showlegend = False,
+# )
+
+# fig.add_scattermap(
+#     lat=relevant_data['lat'], 
+#     lon=relevant_data['lon'],
+#     mode='markers',
+#     marker=dict(size=15, color='Red'),
+#     hoverinfo='text',
+#     text = relevant_data[['tipo_daño_clasificado', 'riesgo_categorizado']].apply(lambda x: f"Daño recibido: {x[0]}<br>Riesgo de derrumbe: {x[1]}", axis=1),
+#     #showlegend=False,
+# )
+
+# fig.update_layout(
+#     title = 'Mapa de Calor de Daños en la CDMX',
+#     map_layers=[{"below": "traces"}])
+
+
+# fig.show()
 
 
 
