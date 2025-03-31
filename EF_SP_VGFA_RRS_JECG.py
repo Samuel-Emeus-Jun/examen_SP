@@ -4,9 +4,9 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
-from sklearn.cluster import KMeans
+# from sklearn.cluster import KMeans
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
@@ -152,7 +152,13 @@ def pedir_coordenadas():
         print("Error: Debes introducir exactamente dos valores separados por comas.")
         return None #pedir_coordenadas()
     
-
+def re_clasificar_daños(valor):
+    if valor in [0, 1]:
+        return 0
+    elif valor == 2:
+        return 1
+    elif valor in [3,4]:
+        return 2
 
 ##LIMPIEZA BBDD
 
@@ -163,7 +169,7 @@ data['tipo_daño_clasificado'] = data['tipo_daño_procesado'].apply(lambda x: cl
 
 data['escala_daño'] = data['tipo_daño_clasificado'].map(mapa_tipo_daño)
 data['riesgo_categorizado'] = data['escala_daño'].apply(categorizar_riesgo)
-
+data['re_escala_daño'] = data['escala_daño'].apply(re_clasificar_daños)
 
 data['delegacion_procesada'] = data['delegacion'].apply(preprocess_text)
 data['delegacion_procesada'] = data['delegacion_procesada'].apply(remove_stopwords)
@@ -175,7 +181,8 @@ data = data.query('delegacion_normalizada != "Provincia"')
 
 ##KNN TRAINING
 
-relevant_data = data[['lat', 'lon', 'tipo_daño_clasificado', 'riesgo_categorizado', 'delegacion_normalizada', 'escala_daño']].dropna()
+
+relevant_data = data[['lat', 'lon', 'tipo_daño_clasificado', 'riesgo_categorizado', 'delegacion_normalizada', 'escala_daño', 're_escala_daño']].dropna()
 
 x = relevant_data[['lat', 'lon']]
 y = relevant_data['escala_daño']
@@ -184,6 +191,10 @@ X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_
 scaler = MinMaxScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
+
+
+##PRUEBAS
+
 
 # print("Primeras filas de X_train normalizado:")
 # print(X_train_scaled[:5])
@@ -197,23 +208,25 @@ knn = KNeighborsClassifier(n_neighbors=5, weights = 'distance')
 knn.fit(X_train_scaled, y_train)
 accuracy = knn.score(X_test_scaled, y_test)
 
+
 ##PRUEBAS MODELO KNN
+
 
 print(f"Precisión del modelo KNN: {accuracy:.2f}")
 
-
+### Predicción de riesgo de derrumbe para nuevas coordenadas
 
 nuevas_coordenadas = [[19.3367846, -99.2284202]] #pedir_coordenadas()
 nuevas_coordenadas_scaled = scaler.transform(nuevas_coordenadas)
 
 predicciones = knn.predict(nuevas_coordenadas_scaled)
-print(f"Predicción para las nuevas coordenadas {nuevas_coordenadas}: {predicciones}")
+print(f"Predicción para las nuevas coordenadas {nuevas_coordenadas}: Riesgo de derrumbe: {predicciones}")
 
 
-from sklearn.metrics import classification_report
+# from sklearn.metrics import classification_report
 
-y_pred = knn.predict(X_test_scaled)
-print(classification_report(y_test, y_pred))
+# y_pred = knn.predict(X_test_scaled)
+# print(classification_report(y_test, y_pred))
 
 
 ##DISEÑO DE HEATMAP
@@ -223,95 +236,60 @@ fig = px.scatter_mapbox(
     relevant_data,
     lat='lat',
     lon='lon',
-    color='escala_daño',  
+    color='re_escala_daño',  
     size= [10] * len(relevant_data),
     hover_name='tipo_daño_clasificado',
     hover_data={'riesgo_categorizado': True, 'escala_daño': True},
     center={'lat': 19.4, 'lon': -99.2},
     zoom=10,
-    mapbox_style='carto-positron',
-    color_continuous_scale='Turbo',
-    opacity = 0.7,
-)
+    mapbox_style='carto-darkmatter',
+    color_continuous_scale= ['green', 'yellow', 'red'],#'Turbo',
+    opacity = 0.5,
 
+)
 
 fig.add_trace(go.Scattermapbox(
     lat=relevant_data['lat'],
     lon=relevant_data['lon'],
-    mode='markers',
+    mode='text',
     marker=dict(size=8, color='rgba(0,0,0,0)'),
     text = relevant_data['tipo_daño_clasificado'],
-    hoverinfo='text'
+    hoverinfo='text',
+    name = 'Tipo de daño',
+    visible = 'legendonly',
 ))
 
+fig.update_coloraxes(
+    colorbar_title = 'Escala de Daño',
+    colorbar_tickvals = [0, 1, 2],
+    colorbar_ticktext = ['Bajo', 'Medio', 'Alto'],
+)
 
 fig.update_traces(
-    marker=dict(sizemode='area', sizemin=3, sizeref=2.0),
+    hoverinfo='text',
+    text=relevant_data['tipo_daño_clasificado'],
+    marker=dict(sizemode='area', sizemin=5, sizeref=2.0),
     hovertemplate="<b>%{hovertext}</b><extra></extra>"
 )
 
+fig.add_trace(go.Scattermapbox(
+    lat=[nuevas_coordenadas[0][0]],
+    lon=[nuevas_coordenadas[0][1]],
+    mode='markers',
+    marker=dict(size=15, color='white'),
+    name = 'Coordenadas del usuario',
+))
+
+fig.update_layout(
+    legend=dict(
+        x = 0.8,
+        y = 0.1,
+        xanchor='left',
+        yanchor='bottom',)
+)
 
 #fig.write_html("mapa.html")
 fig.show()
-
-
-# fig = px.density_map(
-#     relevant_data,
-#     lat = 'lat',
-#     lon = 'lon',
-#     z = 'escala_daño',
-#     radius = 10,
-#     center = {'lat': 19.4, 'lon' : -99.2},
-#     zoom = 10,
-#     map_style = 'carto-darkmatter',
-#     color_continuous_scale = 'Turbo',
-        
-# )
-
-# fig.data[0].hoverinfo = 'skip'
-
-
-# fig.update_coloraxes(
-#     colorbar_title = 'Escala de Daño',
-#     colorbar_tickvals = [0, 2, 4],
-#     colorbar_ticktext = ['Bajo', 'Medio', 'Alto'],
-# )
-
-
-# fig.add_scattermap(
-#     lat=[nuevas_coordenadas[0][0]],
-#     lon=[nuevas_coordenadas[0][1]], 
-#     mode='markers',
-#     marker=dict(
-#         size= 25, 
-#         color='white',  
-#         symbol='circle',    
-#         ),
-#     hovertext = 'Coordenadas del usuario',
-#     #showlegend = False,
-# )
-
-# fig.add_scattermap(
-#     lat=relevant_data['lat'], 
-#     lon=relevant_data['lon'],
-#     mode='markers',
-#     marker=dict(size=15, color='Red'),
-#     hoverinfo='text',
-#     text = relevant_data[['tipo_daño_clasificado', 'riesgo_categorizado']].apply(lambda x: f"Daño recibido: {x[0]}<br>Riesgo de derrumbe: {x[1]}", axis=1),
-#     #showlegend=False,
-# )
-
-# fig.update_layout(
-#     title = 'Mapa de Calor de Daños en la CDMX',
-#     map_layers=[{"below": "traces"}])
-
-
-# fig.show()
-
-
-
-
-
 
 
 ##PRUEBA DE INERCIA PARA ENCONTRAR EL CODO (WEY, ESTO SOLO TIENE SENTIDO SI ERES IED)
